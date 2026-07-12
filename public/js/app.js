@@ -59,7 +59,7 @@ async function startProcessing() {
 
     const formData = new FormData();
     formData.append('image', App.file);
-    const res = await fetch('https://bukuku.up.railway.app/ocr', { 
+    const res = await fetch('/ocr', { 
       method: 'POST', 
       body: formData });
 
@@ -96,10 +96,10 @@ async function execSearch(query, isHistory = false) {
   try {
     toggle('recommendations', false);
     
-    const res = await fetch(OL.search(query), {
-        method: 'GET',
-        mode: 'cors', 
-        headers: { 'Accept': 'application/json' }
+    const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: query })
     });
     
     if (!res.ok) throw new Error('Gagal menghubungi database Open Library');
@@ -136,18 +136,22 @@ async function FetchRekomendasi(book) {
     toggle('recommendations', true);
     $('recoGrid').innerHTML = '<p class="font-mono col-span-full text-center py-4">Mencari buku serupa...</p>';
 
-    let queryUrl = '';
+    let searchBody = null;
     if (book.author_name && book.author_name.length > 0) {
-        queryUrl = `https://openlibrary.org/search.json?author=${encodeURIComponent(book.author_name[0])}&limit=8&fields=key,title,author_name,cover_i`;
+        searchBody = { author: book.author_name[0], limit: 8 };
     } 
     else if (book.subject && book.subject.length > 0) {
-        queryUrl = `https://openlibrary.org/search.json?subject=${encodeURIComponent(book.subject[0])}&limit=8&fields=key,title,author_name,cover_i`;
+        searchBody = { subject: book.subject[0], limit: 8 };
     } else {
         toggle('recommendations', false);
         return;
     }
 
-    const res = await fetch(queryUrl);
+    const res = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(searchBody)
+    });
     if (!res.ok) throw new Error('Gagal memuat rekomendasi');
     const data = await res.json();
     
