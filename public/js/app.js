@@ -51,37 +51,54 @@ function Handler(file) {
   reader.readAsDataURL(file);
 }
 
+function bersihkanTeksOCR(rawText) {
+  if (!rawText) return '';
+  
+  const kataKunciAbaikan = [/masterpiece/i, /fiction/i, /bestseller/i, /novel/i, /edisi/i, /supreme/i];
+  
+  const barisValid = rawText.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .filter(line => !kataKunciAbaikan.some(regex => regex.test(line)));
+    
+  if (barisValid.length === 0) {
+    return rawText.split('\n')[0] || rawText;
+  }
+  
+  return barisValid.join(' ');
+}
+
 async function startProcessing() {
   if (!App.file || App.isProcessing) return;
   App.isProcessing = true;
   
   try {
-
     const formData = new FormData();
     formData.append('image', App.file);
     const res = await fetch('https://bukuku.up.railway.app/ocr', { 
       method: 'POST', 
-      body: formData });
+      body: formData 
+    });
 
     if (!res.ok) {
-    const error = await res.json();
-    console.log(error);
-    throw new Error(error.error || "OCR gagal");
+      const error = await res.json();
+      console.log(error);
+      throw new Error(error.error || "OCR gagal");
     }
 
     const ocrData = await res.json();
-    
     TampilkanOCR(ocrData.text, ocrData.confidence);
     
-    const query = (ocrData.text || '').split('\n')[0] || ocrData.text || '';
-    console.log("OCR TEXT:");
-    console.log(ocrData.text);
+    console.log("OCR TEXT:", ocrData.text);
 
-    console.log("QUERY:");
-    console.log(query);
+    const queryBersih = bersihkanTeksOCR(ocrData.text);
+    console.log("QUERY PROSES:", queryBersih);
     
-    if (query.trim()) await execSearch(query);
-    else alert('Teks tidak terdeteksi, coba foto lebih jelas.');
+    if (queryBersih.trim()) {
+      await execSearch(queryBersih, false);
+    } else {
+      alert('Teks tidak terdeteksi, coba foto lebih jelas.');
+    }
   } catch (err) {
     alert("Error: " + err.message);
   } finally {
@@ -94,7 +111,7 @@ async function CariManual() {
   if (!q || App.isProcessing) return;
   App.isProcessing = true;
   toggle('ocrResult', false);
-  await execSearch(q);
+  await execSearch(q, false);
   App.isProcessing = false;
 }
 
@@ -102,13 +119,17 @@ async function execSearch(query, isHistory = false) {
   try {
     toggle('recommendations', false);
     
-    const res = await fetch(OL.search(query), {
-        method: 'GET',
+    const res = await fetch('https://bukuku.up.railway.app/api/search', {
+        method: 'POST',
         mode: 'cors', 
-        headers: { 'Accept': 'application/json' }
+        headers: { 
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ q: query })
     });
     
-    if (!res.ok) throw new Error('Gagal menghubungi database Open Library');
+    if (!res.ok) throw new Error('Gagal menghubungi database Open Library via Server');
     const data = await res.json();
     if (!data.docs?.length) throw new Error('Buku tidak ditemukan di database.');
     
@@ -133,7 +154,7 @@ async function execSearch(query, isHistory = false) {
 
   } catch (err) {
     console.error("Fetch Error:", err);
-    alert("Koneksi Error: Masalah jaringan atau CORS. Pastikan internet aktif.");
+    alert(err.message || "Koneksi Error: Masalah jaringan atau database.");
   }
 }
 
@@ -180,7 +201,7 @@ function TampilkanRekomendasi(recs) {
     const bgColor = colors[i % colors.length];
     
     return `
-      <div onclick="execSearch('${safeTitle}')" class="neo-card p-4 flex flex-col items-center text-center cursor-pointer hover:-translate-y-2 transition-transform" style="background-color: ${bgColor};">
+      <div onclick="execSearch('${safeTitle}', false)" class="neo-card p-4 flex flex-col items-center text-center cursor-pointer hover:-translate-y-2 transition-transform" style="background-color: ${bgColor};">
         <img src="${coverUrl}" class="w-24 h-36 border-3 border-black object-cover mb-4 bg-white shadow-[3px_3px_0_0_#000]" alt="cover">
         <h3 class="font-bold text-sm uppercase line-clamp-2 mb-2 w-full truncate">${r.title}</h3>
         <p class="text-[11px] font-mono font-bold bg-white border-2 border-black px-2 py-0.5 shadow-[2px_2px_0_0_#000] w-full truncate">${author}</p>
