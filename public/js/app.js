@@ -51,49 +51,61 @@ function Handler(file) {
   reader.readAsDataURL(file);
 }
 
-// FUNGSI PINTAR: Memecah OCR menjadi kandidat kata kunci yang masuk akal bagi database
-function dapatkanKandidatQuery(rawText) {
+function analisisTeksOCR(rawText) {
   if (!rawText) return [];
-  
-  // 1. Bersihkan noise karakter tunggal (seperti 'E', 'G', '3') dan kata promosi umum
-  const kataKunciAbaikan = [/masterpiece/i, /supreme/i, /bestseller/i, /novel/i, /edisi/i, /cetakan/i, /terlaris/i, /penerbit/i, /original/i, /cara/i, /mudah/i, /dan/i, /terbukti/i, /untuk/i];
+
+  const noiseWords = [/bestseller/i, /masterpiece/i, /supreme/i, /novel/i, /edisi/i, /classics/i, /english/i, /classic/i, /^gt$/i];
   
   const lines = rawText.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 1) // Abaikan huruf sendirian berukuran 1 karakter
-    .filter(line => !kataKunciAbaikan.some(regex => regex.test(line)));
+    .filter(line => line.length > 1);
 
-  let kandidat = [];
-
-  // Strategi A: Cari frasa 2-3 kata yang bersebelahan dari baris teks (bagus untuk judul bertumpuk seperti NEGERI PARA BEDEBAH)
-  if (lines.length > 0) {
-    // Gabungkan 3 baris pertama secara fleksibel
-    if (lines[0]) kandidat.push(lines[0]);
-    if (lines[1]) kandidat.push(lines[1]);
-    if (lines[0] && lines[1]) kandidat.push(`${lines[0]} ${lines[1]}`);
-    if (lines[0] && lines[1] && lines[2]) kandidat.push(`${lines[0]} ${lines[1]} ${lines[2]}`);
-  }
-
-  // Strategi B: Ambil semua kata individu yang panjang karakternya >= 4 (misal: "Atomic", "Habits", "Bedebah")
-  // Lalu buat kombinasi berpasangan (bi-gram)
-  const semuaKata = rawText.replace(/[\n\r]/g, ' ')
-    .split(' ')
-    .map(w => w.replace(/[^a-zA-Z]/g, '').trim()) // Hanya ambil huruf alphabet
-    .filter(w => w.length >= 4)
-    .filter(w => !kataKunciAbaikan.some(regex => regex.test(w)));
-
-  for (let i = 0; i < semuaKata.length - 1; i++) {
-    kandidat.push(`${semuaKata[i]} ${semuaKata[i+1]}`);
-  }
+  const daftarPenulis = [/stephen\s*king/i, /lewis\s*carroll/i, /tere\s*liye/i, /j\s*\.\s*k\s*\.\s*rowling/i, /dee\s*lestari/i, /james\s*clear/i, /frank\s*herbert/i];
   
-  // Masukkan juga kata tunggal yang cukup panjang & unik sebagai opsi terakhir
-  semuaKata.forEach(kata => {
-    if (kata.length >= 5) kandidat.push(kata);
+  let detectedAuthor = '';
+  let sisaBarisJudul = [];
+
+  lines.forEach(line => {
+    let isAuthor = false;
+    daftarPenulis.forEach(regex => {
+      if (regex.test(line)) {
+        detectedAuthor = line;
+        isAuthor = true;
+      }
+    });
+    
+    if (!isAuthor && !noiseWords.some(regex => regex.test(line))) {
+      sisaBarisJudul.push(line);
+    }
   });
 
-  // Hapus duplikasi dan urutkan dari string yang paling mendekati susunan judul umum (panjang karakter menengah)
-  const unikKandidat = [...new Set(kandidat)].filter(txt => txt.trim().length > 2);
-  
+  let kandidatPencarian = [];
+
+  if (sisaBarisJudul.length > 0) {
+    const fullTitleCandidate = sisaBarisJudul.join(' ');
+    kandidatPencarian.push({ q: fullTitleCandidate, author: detectedAuthor });
+    
+    if (sisaBarisJudul[0] && sisaBarisJudul[1]) {
+      kandidatPencarian.push({ q: `${sisaBarisJudul[0]} ${sisaBarisJudul[1]}`, author: detectedAuthor });
+    }
+    
+    if (sisaBarisJudul[0]) kandidatPencarian.push({ q: sisaBarisJudul[0], author: detectedAuthor });
+    if (sisaBarisJudul[1]) kandidatPencarian.push({ q: sisaBarisJudul[1], author: detectedAuthor });
+  }
+
+  const textCleaned = lines.filter(l => !noiseWords.some(r => r.test(l))).join(' ');
+  kandidatPencarian.push({ q: textCleaned, author: '' });
+
+  const unikKandidat = [];
+  const map = new Map();
+  for (const item of kandidatPencarian) {
+    const key = `${item.q}|${item.author}`;
+    if (!map.has(key) && item.q.trim().length > 2) {
+      map.set(key, true);
+      unikKandidat.push(item);
+    }
+  }
+
   return unikKandidat;
 }
 
@@ -120,32 +132,31 @@ async function startProcessing() {
     
     console.log("OCR TEXT RAW:\n", ocrData.text);
 
-    // Dapatkan daftar potongan kata kunci terbaik hasil ekstraksi pintar
-    const daftarQuery = dapatkanKandidatQuery(ocrData.text);
-    console.log("KANDIDAT QUERY UNTUK UJI COBA:", daftarQuery);
+    // Dapatkan daftar objek pencarian structured (q & author)
+    const daftarKandidat = analisisTeksOCR(ocrData.text);
+    console.log("KANDIDAT QUERY BERSTRUKTUR:", daftarKandidat);
     
-    if (daftarQuery.length === 0) {
+    if (daftarKandidat.length === 0) {
       alert('Teks tidak terdeteksi jelas, silakan gunakan pencarian manual.');
       App.isProcessing = false;
       return;
     }
 
-    // Eksekusi pencarian berantai (Looping Fallback System)
     let berhasil = false;
-    for (let i = 0; i < daftarQuery.length; i++) {
-      console.log(`Mencoba query ke-${i + 1}: [${daftarQuery[i]}]`);
+    for (let i = 0; i < daftarKandidat.length; i++) {
+      console.log(`Mencoba kombinasi ke-${i + 1}: Judul=[${daftarKandidat[i].q}], Penulis=[${daftarKandidat[i].author}]`);
       try {
-        await execSearch(daftarQuery[i], false);
+        await execSearch(daftarKandidat[i].q, daftarKandidat[i].author, false);
         berhasil = true;
-        console.log(`🎉 Sukses! Buku ditemukan via keyword: "${daftarQuery[i]}"`);
-        break; // Stop loop jika data berhasil ditarik
+        console.log(`🎉 Sukses! Buku ditemukan.`);
+        break; 
       } catch (err) {
-        console.log(`Keyword "${daftarQuery[i]}" tidak cocok. Mencoba alternatif lain...`);
+        console.log(`Kombinasi ke-${i + 1} gagal. Mencoba alternatif berikutnya...`);
       }
     }
 
     if (!berhasil) {
-      alert("Buku gagal diidentifikasi secara otomatis dari cover. Silakan ketik langsung pada Pencarian Manual di bawah.");
+      alert("Buku gagal diidentifikasi secara tepat dari cover. Silakan gunakan Pencarian Manual di bawah.");
     }
 
   } catch (err) {
@@ -161,7 +172,7 @@ async function CariManual() {
   App.isProcessing = true;
   toggle('ocrResult', false);
   try {
-    await execSearch(q, false);
+    await execSearch(q, '', false);
   } catch (err) {
     alert(err.message);
   } finally {
@@ -169,7 +180,7 @@ async function CariManual() {
   }
 }
 
-async function execSearch(query, isHistory = false) {
+async function execSearch(query, author = '', isHistory = false) {
   toggle('recommendations', false);
   
   const res = await fetch('https://bukuku.up.railway.app/api/search', {
@@ -179,7 +190,7 @@ async function execSearch(query, isHistory = false) {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ q: query })
+      body: JSON.stringify({ q: query, author: author })
   });
   
   if (!res.ok) throw new Error('Gagal menghubungi database Open Library via Server');
@@ -249,7 +260,7 @@ function TampilkanRekomendasi(recs) {
     const bgColor = colors[i % colors.length];
     
     return `
-      <div onclick="execSearch('${safeTitle}', false)" class="neo-card p-4 flex flex-col items-center text-center cursor-pointer hover:-translate-y-2 transition-transform" style="background-color: ${bgColor};">
+      <div onclick="execSearch('${safeTitle}', '', false)" class="neo-card p-4 flex flex-col items-center text-center cursor-pointer hover:-translate-y-2 transition-transform" style="background-color: ${bgColor};">
         <img src="${coverUrl}" class="w-24 h-36 border-3 border-black object-cover mb-4 bg-white shadow-[3px_3px_0_0_#000]" alt="cover">
         <h3 class="font-bold text-sm uppercase line-clamp-2 mb-2 w-full truncate">${r.title}</h3>
         <p class="text-[11px] font-mono font-bold bg-white border-2 border-black px-2 py-0.5 shadow-[2px_2px_0_0_#000] w-full truncate">${author}</p>
@@ -287,7 +298,7 @@ function WarnaRiwayat() {
   const colors = ['#fde047', '#a7f3d0', '#f9a8d4', '#93c5fd', '#fb923c'];
 
   list.innerHTML = App.history.map((h, i) => `
-    <div onclick="execSearch('${h.title.replace(/'/g, "\\'")}', true)" 
+    <div onclick="execSearch('${h.title.replace(/'/g, "\\'")}', '', true)" 
          class="neo-card p-3 flex items-center gap-4 mb-3 cursor-pointer hover:translate-x-1 transition-transform"
          style="background-color: ${colors[i % colors.length]};">
       <img src="${h.cover}" class="w-10 h-14 border-2 border-black" alt="cover">
