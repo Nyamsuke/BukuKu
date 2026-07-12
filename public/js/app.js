@@ -59,7 +59,7 @@ async function startProcessing() {
     const formData = new FormData();
     formData.append('image', App.file);
     
-    const res = await fetch('http://localhost:3000/ocr', { method: 'POST', body: formData });
+    const res = await fetch('https://bukuku.up.railway.app/ocr');
     if (!res.ok) throw new Error('OCR service error (Server backend belum jalan)');
     const ocrData = await res.json();
     
