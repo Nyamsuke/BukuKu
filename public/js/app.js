@@ -51,38 +51,50 @@ function Handler(file) {
   reader.readAsDataURL(file);
 }
 
-// Ekstraksi kandidat query terbaik dari baris-baris OCR
+// FUNGSI PINTAR: Memecah OCR menjadi kandidat kata kunci yang masuk akal bagi database
 function dapatkanKandidatQuery(rawText) {
   if (!rawText) return [];
   
-  // Bersihkan baris teks kosong
+  // 1. Bersihkan noise karakter tunggal (seperti 'E', 'G', '3') dan kata promosi umum
+  const kataKunciAbaikan = [/masterpiece/i, /supreme/i, /bestseller/i, /novel/i, /edisi/i, /cetakan/i, /terlaris/i, /penerbit/i, /original/i, /cara/i, /mudah/i, /dan/i, /terbukti/i, /untuk/i];
+  
   const lines = rawText.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 1);
+    .filter(line => line.length > 1) // Abaikan huruf sendirian berukuran 1 karakter
+    .filter(line => !kataKunciAbaikan.some(regex => regex.test(line)));
 
-  const kandidat = [];
-  
-  // 1. Masukkan baris pertama (biasanya judul utama atau tagline)
-  if (lines[0]) kandidat.push(lines[0]);
-  
-  // 2. Masukkan baris kedua (bisa jadi judul utama kalau baris pertama cuma tagline)
-  if (lines[1]) kandidat.push(lines[1]);
-  
-  // 3. Masukkan kombinasi baris 1 + baris 2 (jika judulnya panjang terpotong)
-  if (lines[0] && lines[1]) kandidat.push(`${lines[0]} ${lines[1]}`);
+  let kandidat = [];
 
-  // 4. Bersihkan kata promosi/noise umum yang sering mengganggu pencarian
-  const kataKunciAbaikan = [/masterpiece/i, /supreme/i, /bestseller/i, /novel/i, /edisi/i, /cetakan/i, /terlaris/i, /penerbit/i];
-  
-  const kandidatBersih = kandidat.map(text => {
-    return text.split(' ')
-      .filter(kata => !kataKunciAbaikan.some(regex => regex.test(kata)))
-      .join(' ')
-      .trim();
-  }).filter(text => text.length > 1);
+  // Strategi A: Cari frasa 2-3 kata yang bersebelahan dari baris teks (bagus untuk judul bertumpuk seperti NEGERI PARA BEDEBAH)
+  if (lines.length > 0) {
+    // Gabungkan 3 baris pertama secara fleksibel
+    if (lines[0]) kandidat.push(lines[0]);
+    if (lines[1]) kandidat.push(lines[1]);
+    if (lines[0] && lines[1]) kandidat.push(`${lines[0]} ${lines[1]}`);
+    if (lines[0] && lines[1] && lines[2]) kandidat.push(`${lines[0]} ${lines[1]} ${lines[2]}`);
+  }
 
-  // Hilangkan duplikasi jika ada kandidat yang sama
-  return [...new Set(kandidatBersih)];
+  // Strategi B: Ambil semua kata individu yang panjang karakternya >= 4 (misal: "Atomic", "Habits", "Bedebah")
+  // Lalu buat kombinasi berpasangan (bi-gram)
+  const semuaKata = rawText.replace(/[\n\r]/g, ' ')
+    .split(' ')
+    .map(w => w.replace(/[^a-zA-Z]/g, '').trim()) // Hanya ambil huruf alphabet
+    .filter(w => w.length >= 4)
+    .filter(w => !kataKunciAbaikan.some(regex => regex.test(w)));
+
+  for (let i = 0; i < semuaKata.length - 1; i++) {
+    kandidat.push(`${semuaKata[i]} ${semuaKata[i+1]}`);
+  }
+  
+  // Masukkan juga kata tunggal yang cukup panjang & unik sebagai opsi terakhir
+  semuaKata.forEach(kata => {
+    if (kata.length >= 5) kandidat.push(kata);
+  });
+
+  // Hapus duplikasi dan urutkan dari string yang paling mendekati susunan judul umum (panjang karakter menengah)
+  const unikKandidat = [...new Set(kandidat)].filter(txt => txt.trim().length > 2);
+  
+  return unikKandidat;
 }
 
 async function startProcessing() {
@@ -108,31 +120,32 @@ async function startProcessing() {
     
     console.log("OCR TEXT RAW:\n", ocrData.text);
 
-    // Dapatkan daftar kandidat query terbaik
+    // Dapatkan daftar potongan kata kunci terbaik hasil ekstraksi pintar
     const daftarQuery = dapatkanKandidatQuery(ocrData.text);
-    console.log("KANDIDAT QUERY UNTUK DI-TRY:", daftarQuery);
+    console.log("KANDIDAT QUERY UNTUK UJI COBA:", daftarQuery);
     
     if (daftarQuery.length === 0) {
-      alert('Teks tidak terdeteksi, coba foto lebih jelas.');
+      alert('Teks tidak terdeteksi jelas, silakan gunakan pencarian manual.');
       App.isProcessing = false;
       return;
     }
 
-    // Lakukan pencarian beruntun (jika query ke-1 gagal, coba query ke-2, dst.)
+    // Eksekusi pencarian berantai (Looping Fallback System)
     let berhasil = false;
     for (let i = 0; i < daftarQuery.length; i++) {
-      console.log(`Mencoba query (${i + 1}/${daftarQuery.length}):`, daftarQuery[i]);
+      console.log(`Mencoba query ke-${i + 1}: [${daftarQuery[i]}]`);
       try {
         await execSearch(daftarQuery[i], false);
         berhasil = true;
-        break; // Jika berhasil, stop perulangan pencarian
+        console.log(`🎉 Sukses! Buku ditemukan via keyword: "${daftarQuery[i]}"`);
+        break; // Stop loop jika data berhasil ditarik
       } catch (err) {
-        console.log(`Query "${daftarQuery[i]}" gagal/tidak ditemukan. Mencoba fallback...`);
+        console.log(`Keyword "${daftarQuery[i]}" tidak cocok. Mencoba alternatif lain...`);
       }
     }
 
     if (!berhasil) {
-      alert("Buku tidak ditemukan di database menggunakan deteksi otomatis cover. Silakan gunakan fitur Pencarian Manual di bawah.");
+      alert("Buku gagal diidentifikasi secara otomatis dari cover. Silakan ketik langsung pada Pencarian Manual di bawah.");
     }
 
   } catch (err) {
