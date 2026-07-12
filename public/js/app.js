@@ -68,12 +68,18 @@ async function startProcessing() {
     console.log(error);
     throw new Error(error.error || "OCR gagal");
     }
-    
+
     const ocrData = await res.json();
     
     TampilkanOCR(ocrData.text, ocrData.confidence);
     
     const query = (ocrData.text || '').split('\n')[0] || ocrData.text || '';
+    console.log("OCR TEXT:");
+    console.log(ocrData.text);
+
+    console.log("QUERY:");
+    console.log(query);
+    
     if (query.trim()) await execSearch(query);
     else alert('Teks tidak terdeteksi, coba foto lebih jelas.');
   } catch (err) {
