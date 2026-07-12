@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "tidal-triumph-493807-j6",
+  "private_key_id": "42ac021a348681324eab2fbf4205d52e1a115da6",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDpkNgJw+4RbaoC\nR5mrznYesoLzmRVOQvG30BNim5HUy6AZvv+AzlM5iMb7YKnO3KWa7V3A1BUjgoZU\nUbR77ubkBJ5B7+1sLcG/lI5tHzyQ3uwwkxkiXx3wT1+BPQF9UX1Mp5acoDEi2Ffm\ntVLowchY4JVnHk1p9v7yIFg7tBXd+APV+3tTwBAeSYsDxTCcsGL9WdB66v9NbeIQ\nLtmzywpapkxixc/XbhuyfGleGIN3QLsfQKIdeL/0QhWvSRm+pIlvxRp9380hOt6F\nYxBRHFPlvA/CBw2cFz8JQVHkq/Pg/tu/mDGOWFalebrFdP2GSTCqMe7as2A82iPv\nnbX9n+xFAgMBAAECggEAFABZo9JxxW/O9oWDqSUT0/KlCK/UFYDhmsRYmKHqZd7v\nLa0/y5u/oEZwhc/kEskt7FvF4tC2o7UWhEt/6XoOrzmfBNYDTreHZzzVSo55fQ1+\nC/XY2err0Su26cYb5cuv73vNh8mnE40Tz/e4qyKHIedPnAZKClhCwmDXNXupQLoF\n1gpPtunH07cy2uOkVzuUwl3AjIuiPQCUQTXbiPPRKGvhwKQjmdVwfgxtuQw4Hhd/\nx4DzWAtUnwRYalFw6iJ0x0IvMkacinrRj/zhWyg6wdGZJ7mNddfcR6K7bIBacX11\nvFxoCyPZ0Mw727rN6w6uM5svrdQCxzz+1VLQ+Qqj0QKBgQD3LwDfDB1yTZ1cndCx\nbcc+uTCvCVwNWwYiTGi3CX8AL0CuPk40EtWmCNoxjp+eXl3FEwX332P6seuu28El\nnlUc19qi/hm98iGif9h3et8qM7BkBBupL9nu0HucxW7wBv+A5/I5y0EhStyZcTwh\nFhSYLo50PNsp5Gsi4qoRsdKJEQKBgQDx5X+QrA5HTrFgyXDAau56mwKaBfrJo+k5\nvHKdjzKGWBjroQiyeUuqBGj+XxeXdWMwetV2+8LW34+SNapzS8Z+UPbXfyTSBaz0\ngcZtdK1PXvFLo+MPJrhC+3ott1PHefu9sno3aj0JSJgDpaL3D4hMP4BAZoFqGFsF\njUgD3W7P9QKBgQDtaE686+ToYNVwG/9SOq7wdmvk4edwyGkWzi6RBmTdZ4UHFb6E\n00YyZzQx/tsd/2KuorvLu9pJ8VL9KgHTwMPcpRFQFR/iSMm3SnU9JF1tKiITncJ3\neAcoEUN4akRH82C5jY0fpzFR6ZYBJjnrSUrUc3rM95pEHSgtZGiWACXHEQKBgEyC\ns5OV6DpDuLUNYh1qdR3Qk8UV6RoIP0ekxHfziB6YFOHKoI6a8QTIulDi0Pp2Bbaa\n05P708fVFHtBgDVRnWnsv/avX30SkH8R4SpTwlGdjSLIppPvQk7lbeKx3sz0V1zL\n6/5FGyMpk/NrW51bi1faqf00rvBY3clmw4V9b4RVAoGBAOqNYQbsfjqJ2v/YyT9L\ndMyU53OpQ0ul04C690uUVZzdfQ5oz5fB8svYrhE5wh/vVb4LU11QVU5z8qkuaqxE\nPkaWTVGNil0rvcvzX3DK4rRWuSHkCsIr1DRMn7VXifZjz+oCjtqgP0ObQh5S6HQv\ncFbYzG/WWxlJz+v0CfOTyCR7\n-----END PRIVATE KEY-----\n",
+  "client_email": "blizyblitz@tidal-triumph-493807-j6.iam.gserviceaccount.com",
+  "client_id": "115623339840950949206",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/blizyblitz%40tidal-triumph-493807-j6.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
