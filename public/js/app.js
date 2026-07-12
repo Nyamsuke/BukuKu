@@ -73,7 +73,14 @@ async function startProcessing() {
     
     TampilkanOCR(ocrData.text, ocrData.confidence);
     
-    const query = (ocrData.text || '').split('\n')[0] || ocrData.text || '';
+    const lines = ocrData.text
+    .split('\n')
+    .map(x => x.trim())
+    .filter(x => x.length > 2);
+
+    console.log(lines);
+
+    const query = lines.slice(0,3).join(" ");
     console.log("OCR TEXT:");
     console.log(ocrData.text);
 
