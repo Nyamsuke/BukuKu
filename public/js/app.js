@@ -56,14 +56,19 @@ async function startProcessing() {
   App.isProcessing = true;
   
   try {
+
     const formData = new FormData();
     formData.append('image', App.file);
+    const res = await fetch('https://bukuku.up.railway.app/ocr', { 
+      method: 'POST', 
+      body: formData });
+
+    if (!res.ok) {
+    const error = await res.json();
+    console.log(error);
+    throw new Error(error.error || "OCR gagal");
+    }
     
-    const formData = new FormData();
-    formData.append('image', App.file);
-    const res = await fetch('https://bukuku.up.railway.app/ocr', { method: 'POST', body: formData });
-    
-    if (!res.ok) throw new Error('OCR service error (Server backend belum jalan)');
     const ocrData = await res.json();
     
     TampilkanOCR(ocrData.text, ocrData.confidence);
