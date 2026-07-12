@@ -51,21 +51,38 @@ function Handler(file) {
   reader.readAsDataURL(file);
 }
 
-function bersihkanTeksOCR(rawText) {
-  if (!rawText) return '';
+// Ekstraksi kandidat query terbaik dari baris-baris OCR
+function dapatkanKandidatQuery(rawText) {
+  if (!rawText) return [];
   
-  const kataKunciAbaikan = [/masterpiece/i, /fiction/i, /bestseller/i, /novel/i, /edisi/i, /supreme/i];
-  
-  const barisValid = rawText.split('\n')
+  // Bersihkan baris teks kosong
+  const lines = rawText.split('\n')
     .map(line => line.trim())
-    .filter(line => line.length > 0)
-    .filter(line => !kataKunciAbaikan.some(regex => regex.test(line)));
-    
-  if (barisValid.length === 0) {
-    return rawText.split('\n')[0] || rawText;
-  }
+    .filter(line => line.length > 1);
+
+  const kandidat = [];
   
-  return barisValid.join(' ');
+  // 1. Masukkan baris pertama (biasanya judul utama atau tagline)
+  if (lines[0]) kandidat.push(lines[0]);
+  
+  // 2. Masukkan baris kedua (bisa jadi judul utama kalau baris pertama cuma tagline)
+  if (lines[1]) kandidat.push(lines[1]);
+  
+  // 3. Masukkan kombinasi baris 1 + baris 2 (jika judulnya panjang terpotong)
+  if (lines[0] && lines[1]) kandidat.push(`${lines[0]} ${lines[1]}`);
+
+  // 4. Bersihkan kata promosi/noise umum yang sering mengganggu pencarian
+  const kataKunciAbaikan = [/masterpiece/i, /supreme/i, /bestseller/i, /novel/i, /edisi/i, /cetakan/i, /terlaris/i, /penerbit/i];
+  
+  const kandidatBersih = kandidat.map(text => {
+    return text.split(' ')
+      .filter(kata => !kataKunciAbaikan.some(regex => regex.test(kata)))
+      .join(' ')
+      .trim();
+  }).filter(text => text.length > 1);
+
+  // Hilangkan duplikasi jika ada kandidat yang sama
+  return [...new Set(kandidatBersih)];
 }
 
 async function startProcessing() {
@@ -89,16 +106,35 @@ async function startProcessing() {
     const ocrData = await res.json();
     TampilkanOCR(ocrData.text, ocrData.confidence);
     
-    console.log("OCR TEXT:", ocrData.text);
+    console.log("OCR TEXT RAW:\n", ocrData.text);
 
-    const queryBersih = bersihkanTeksOCR(ocrData.text);
-    console.log("QUERY PROSES:", queryBersih);
+    // Dapatkan daftar kandidat query terbaik
+    const daftarQuery = dapatkanKandidatQuery(ocrData.text);
+    console.log("KANDIDAT QUERY UNTUK DI-TRY:", daftarQuery);
     
-    if (queryBersih.trim()) {
-      await execSearch(queryBersih, false);
-    } else {
+    if (daftarQuery.length === 0) {
       alert('Teks tidak terdeteksi, coba foto lebih jelas.');
+      App.isProcessing = false;
+      return;
     }
+
+    // Lakukan pencarian beruntun (jika query ke-1 gagal, coba query ke-2, dst.)
+    let berhasil = false;
+    for (let i = 0; i < daftarQuery.length; i++) {
+      console.log(`Mencoba query (${i + 1}/${daftarQuery.length}):`, daftarQuery[i]);
+      try {
+        await execSearch(daftarQuery[i], false);
+        berhasil = true;
+        break; // Jika berhasil, stop perulangan pencarian
+      } catch (err) {
+        console.log(`Query "${daftarQuery[i]}" gagal/tidak ditemukan. Mencoba fallback...`);
+      }
+    }
+
+    if (!berhasil) {
+      alert("Buku tidak ditemukan di database menggunakan deteksi otomatis cover. Silakan gunakan fitur Pencarian Manual di bawah.");
+    }
+
   } catch (err) {
     alert("Error: " + err.message);
   } finally {
@@ -111,51 +147,50 @@ async function CariManual() {
   if (!q || App.isProcessing) return;
   App.isProcessing = true;
   toggle('ocrResult', false);
-  await execSearch(q, false);
-  App.isProcessing = false;
+  try {
+    await execSearch(q, false);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    App.isProcessing = false;
+  }
 }
 
 async function execSearch(query, isHistory = false) {
+  toggle('recommendations', false);
+  
+  const res = await fetch('https://bukuku.up.railway.app/api/search', {
+      method: 'POST',
+      mode: 'cors', 
+      headers: { 
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ q: query })
+  });
+  
+  if (!res.ok) throw new Error('Gagal menghubungi database Open Library via Server');
+  const data = await res.json();
+  if (!data.docs?.length) throw new Error('Buku tidak ditemukan di database.');
+  
+  let book = data.docs[0];
+
   try {
-    toggle('recommendations', false);
-    
-    const res = await fetch('https://bukuku.up.railway.app/api/search', {
-        method: 'POST',
-        mode: 'cors', 
-        headers: { 
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ q: query })
-    });
-    
-    if (!res.ok) throw new Error('Gagal menghubungi database Open Library via Server');
-    const data = await res.json();
-    if (!data.docs?.length) throw new Error('Buku tidak ditemukan di database.');
-    
-    let book = data.docs[0];
-
-    try {
-      const workRes = await fetch(OL.work(book.key));
-      if (workRes.ok) {
-        const workData = await workRes.json();
-        book.description = workData.description 
-          ? (typeof workData.description === 'string' ? workData.description : workData.description.value)
-          : "Deskripsi belum tersedia.";
-      }
-    } catch (e) {
-      book.description = "Deskripsi gagal dimuat.";
+    const workRes = await fetch(OL.work(book.key));
+    if (workRes.ok) {
+      const workData = await workRes.json();
+      book.description = workData.description 
+        ? (typeof workData.description === 'string' ? workData.description : workData.description.value)
+        : "Deskripsi belum tersedia.";
     }
-
-    TampilkanBuku(book);
-    if (!isHistory) TambahRiwayat(book);
-    
-    FetchRekomendasi(book);
-
-  } catch (err) {
-    console.error("Fetch Error:", err);
-    alert(err.message || "Koneksi Error: Masalah jaringan atau database.");
+  } catch (e) {
+    book.description = "Deskripsi gagal dimuat.";
   }
+
+  TampilkanBuku(book);
+  if (!isHistory) TambahRiwayat(book);
+  
+  FetchRekomendasi(book);
 }
 
 async function FetchRekomendasi(book) {
